@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { supabase } from "./supabase";
+import {
+  loadCloudWorkoutState,
+  saveCloudWorkoutState,
+} from "./workout-cloud";
 
 type WorkoutDay = "Push Day" | "Pull Day" | "Leg Day";
 type SetData = { weight: number; reps: number };
@@ -81,6 +86,26 @@ const RETIRED_EXERCISE_NAMES: Record<string, string> = {
   "seated-leg-curl": "Seated Leg Curl",
   "calf-raise": "Calf Raise",
 };
+function isValidCloudWorkoutState(
+  value: unknown
+): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const state = value as Record<string, unknown>;
+  const lastOrders = state.lastOrders;
+
+  if (!lastOrders || typeof lastOrders !== "object") {
+    return false;
+  }
+
+  const orders = lastOrders as Record<string, unknown>;
+
+  return ["Push Day", "Pull Day", "Leg Day"].every(
+    (day) => Array.isArray(orders[day])
+  );
+}
 const STORE = "gym-log-v2";
 const today = () => new Date().toLocaleDateString("en-US");
 const blankHistory = (): WorkoutHistory => ({
@@ -95,6 +120,10 @@ const inputClass = (value: string, last: number) =>
 
 export default function Home() {
   const [ready, setReady] = useState(false);
+  const [localReady, setLocalReady] = useState(false);
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState("Cloud not connected");
   const [day, setDay] = useState<WorkoutDay>("Push Day");
   const [date, setDate] = useState(today());
   const [lastOrders, setLastOrders] = useState<WorkoutHistory>(blankHistory);
@@ -107,7 +136,53 @@ export default function Home() {
   const [suggestions, setSuggestions] = useState<EntryMap>({});
   const [timerEnds, setTimerEnds] = useState<Record<string, number>>({});
   const [clock, setClock] = useState(Date.now());
+useEffect(() => {
+  let cancelled = false;
 
+  async function checkCloudLogin() {
+    try {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (error || !data.user) {
+        setCloudStatus("Not signed in - local storage only");
+        setCloudReady(false);
+        return;
+      }
+
+      setCloudStatus("Checking cloud workout data...");
+
+const cloudRecord = await loadCloudWorkoutState();
+
+if (cancelled) return;
+
+const cloudState = cloudRecord?.state;
+
+if (!isValidCloudWorkoutState(cloudState)) {
+  setCloudStatus("No valid cloud workout history yet");
+  setCloudReady(false);
+  return;
+}
+
+setCloudStatus("Valid cloud workout data found");
+setCloudReady(false);
+    } catch (error) {
+      if (cancelled) return;
+      console.error("Cloud login check failed", error);
+      setCloudStatus("Cloud unavailable - local storage only");
+      setCloudReady(false);
+    }
+  }
+
+if (localReady) {
+    void checkCloudLogin();
+  }
+
+  return () => {
+    cancelled = true;
+  };
+}, [localReady]);
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORE);
@@ -140,7 +215,8 @@ export default function Home() {
       console.error("Could not load saved workout data", error);
     }
     setReady(true);
-  }, []);
+setLocalReady(true);
+}, []);
 
   useEffect(() => {
     if (!ready) return;
@@ -316,6 +392,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-900 p-4 pb-12 text-white">
+        <div className="mb-3 rounded-lg bg-gray-800 p-2 text-center text-xs text-gray-300">
+  Cloud: {cloudStatus}
+</div>
       <div className="mb-5 text-center">
         <select value={day} onChange={(event) => setDay(event.target.value as WorkoutDay)}
           className="mb-3 rounded-lg bg-gray-800 p-3 text-center text-2xl font-bold text-white">
