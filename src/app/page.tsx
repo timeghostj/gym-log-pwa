@@ -236,6 +236,32 @@ export default function Home() {
     return Math.max(0, Math.ceil(((timerEnds[key] ?? 0) - clock) / 1000));
   }
 
+  function backupWorkoutData() {
+    try {
+      const stored = localStorage.getItem(STORE);
+      if (!stored) {
+        window.alert("No saved Gym Log data was found on this device.");
+        return;
+      }
+
+      // Validate that the existing saved data is valid JSON before exporting.
+      JSON.parse(stored);
+      const blob = new Blob([stored], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.href = url;
+      link.download = `gym-log-v2-backup-${timestamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      console.error("Could not export Gym Log backup", error);
+      window.alert("Backup failed. Your saved workout data was not changed.");
+    }
+  }
+
   function completeWorkout() {
     const selected = orders[day];
     if (selected.length === 0) return;
@@ -300,6 +326,11 @@ export default function Home() {
             className="rounded-lg bg-gray-800 p-3 text-center text-gray-200" />
         </div>
       </div>
+
+      <button type="button" onClick={backupWorkoutData}
+        className="mb-5 w-full rounded-xl bg-gray-700 p-3 font-semibold text-white">
+        Backup Workout Data (.json)
+      </button>
 
       <section className="mb-5 rounded-xl bg-gray-800 p-4">
         <h2 className="mb-2 text-lg font-bold">Previous {day} Workout</h2>
