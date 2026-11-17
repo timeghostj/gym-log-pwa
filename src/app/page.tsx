@@ -106,7 +106,7 @@ function isValidCloudWorkoutState(
     (day) => Array.isArray(orders[day])
   );
 }
-const STORE = "gym-log-v2";
+const STORE = "gym-log-v3";
 const today = () => new Date().toLocaleDateString("en-US");
 const blankHistory = (): WorkoutHistory => ({
   "Push Day": [], "Pull Day": [], "Leg Day": [],
@@ -199,18 +199,11 @@ if (localReady) {
           setEntries(data.entries ?? {});
         }
       } else {
-        // One-time import of the old fixed-exercise app's previous set data.
-        const old = localStorage.getItem("gym-log-last-data");
-        if (old) {
-          const parsed = JSON.parse(old) as Record<string, SetData[]>;
-          const migrated: ExerciseHistory = {};
-          for (const exercise of LIBRARY) {
-            if (Array.isArray(parsed[exercise.name])) migrated[exercise.id] = parsed[exercise.name].slice(0, 5);
-          }
-          setHistory(migrated);
-          setLastOrders({ ...DEFAULT_EXERCISES });
-        }
-      }
+  // Gym Log V3 starts with fresh workout history.
+  // Do not import previous V2 workout data.
+  setHistory({});
+  setLastOrders(blankHistory());
+}
     } catch (error) {
       console.error("Could not load saved workout data", error);
     }
