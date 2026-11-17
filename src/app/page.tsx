@@ -2,527 +2,419 @@
 
 import { useEffect, useState } from "react";
 
-const getToday = () => new Date().toLocaleDateString("en-US");
+type WorkoutDay = "Push Day" | "Pull Day" | "Leg Day";
+type SetData = { weight: number; reps: number };
+type Exercise = { id: string; name: string; group: string };
+type WorkoutHistory = Record<WorkoutDay, string[]>;
+type ExerciseHistory = Record<string, SetData[]>;
+type EntryMap = Record<string, string>;
 
-const workouts = {
-  "Push Day": [
-    "DB Bench Press",
-    "DB Incline Press",
-    "Seated Arnold Press",
-    "DB Lateral Raise",
-    "Calf Raise",
-  ],
-  "Pull Day": ["Lat Pull-Down", "Single Arm BO Row", "DB Curl", "DB Hammer Curl"],
-  "Leg Day": [
-    "DB Deadlift",
-    "Assisted Lunge",
-    "Kettle Bell Swing",
-    "Machine Leg Ext",
-    "Machine Leg Curl",
-  ],
+const DAYS: WorkoutDay[] = ["Push Day", "Pull Day", "Leg Day"];
+const DEFAULT_EXERCISES: WorkoutHistory = {
+  "Push Day": ["db-bench", "db-incline", "db-lateral"],
+  "Pull Day": ["lat-pulldown", "one-arm-row", "db-curl", "hammer-curl"],
+  "Leg Day": ["db-deadlift", "assisted-lunge", "kb-swing", "leg-extension", "leg-curl"],
 };
 
-type WorkoutName = keyof typeof workouts;
-type RowType = "normal" | "burnout";
-type WorkoutRow = { id: string; label: string; type: RowType };
-type SetData = { weight: number; reps: number };
-
-const baseRows: WorkoutRow[] = [
-  { id: "set-1", label: "Set 1", type: "normal" },
-  { id: "set-2", label: "Set 2", type: "normal" },
-  { id: "set-3", label: "Set 3", type: "normal" },
-  { id: "set-4", label: "Set 4", type: "normal" },
-  { id: "set-5", label: "Set 5", type: "normal" },
+const LIBRARY: Exercise[] = [
+  { id: "bb-bench", name: "Barbell Bench Press", group: "Chest" },
+  { id: "db-bench", name: "DB Bench Press", group: "Chest" },
+  { id: "db-incline", name: "DB Incline Press", group: "Chest" },
+  { id: "smith-bench", name: "Smith Machine Bench Press", group: "Chest" },
+  { id: "chest-press", name: "Chest Press Machine", group: "Chest" },
+  { id: "chest-press-incline", name: "Chest Press Machine - Incline", group: "Chest" },
+  { id: "chest-press-decline", name: "Chest Press Machine - Decline", group: "Chest" },
+  { id: "pec-deck", name: "Pec Deck Fly", group: "Chest" },
+  { id: "cable-fly", name: "Cable Chest Fly", group: "Chest" },
+  { id: "pushup", name: "Push-Up", group: "Chest" },
+  { id: "db-shoulder", name: "DB Shoulder Press", group: "Shoulders" },
+  { id: "bb-ohp", name: "Barbell Overhead Press", group: "Shoulders" },
+  { id: "shoulder-machine", name: "Shoulder Press Machine", group: "Shoulders" },
+  { id: "db-lateral", name: "DB Lateral Raise", group: "Shoulders" },
+  { id: "cable-lateral", name: "Cable Lateral Raise", group: "Shoulders" },
+  { id: "machine-lateral", name: "Machine Lateral Raise", group: "Shoulders" },
+  { id: "rear-delt", name: "Reverse Pec Deck", group: "Shoulders" },
+  { id: "face-pull", name: "Cable Face Pull", group: "Shoulders" },
+  { id: "lat-pulldown", name: "Lat Pull-Down", group: "Back" },
+  { id: "pullup", name: "Pull-Up / Assisted Pull-Up", group: "Back" },
+  { id: "seated-row", name: "Seated Cable Row", group: "Back" },
+  { id: "chest-supported-row", name: "Chest-Supported Row", group: "Back" },
+  { id: "one-arm-row", name: "Single Arm BO Row", group: "Back" },
+  { id: "bb-row", name: "Barbell Bent-Over Row", group: "Back" },
+  { id: "straight-arm", name: "Straight-Arm Pulldown", group: "Back" },
+  { id: "db-curl", name: "DB Curl", group: "Biceps" },
+  { id: "hammer-curl", name: "DB Hammer Curl", group: "Biceps" },
+  { id: "preacher-curl", name: "Preacher Curl", group: "Biceps" },
+  { id: "triceps-pushdown", name: "Triceps Cable Pushdown", group: "Triceps" },
+  { id: "overhead-triceps", name: "Overhead Cable Triceps Extension", group: "Triceps" },
+  { id: "dips", name: "Dip / Assisted Dip", group: "Triceps" },
+  { id: "db-deadlift", name: "DB Deadlift", group: "Legs" },
+  { id: "rdl", name: "Romanian Deadlift", group: "Legs" },
+  { id: "smith-squat", name: "Smith Machine Squat", group: "Legs" },
+  { id: "leg-press", name: "Leg Press", group: "Legs" },
+  { id: "hack-squat", name: "Hack Squat", group: "Legs" },
+  { id: "assisted-lunge", name: "Assisted Lunge", group: "Legs" },
+  { id: "walking-lunge", name: "Walking Lunge", group: "Legs" },
+  { id: "bulgarian", name: "Bulgarian Split Squat", group: "Legs" },
+  { id: "leg-extension", name: "Machine Leg Ext", group: "Legs" },
+  { id: "leg-curl", name: "Machine Leg Curl", group: "Legs" },
+  { id: "kb-swing", name: "Kettle Bell Swing", group: "Legs" },
+  { id: "hip-thrust", name: "Hip Thrust", group: "Legs" },
+  { id: "seated-calf", name: "Seated Calf Raise", group: "Calves" },
+  { id: "standing-calf", name: "Standing Calf Raise Machine", group: "Calves" },
+  { id: "ab-crunch", name: "Abdominal Crunch Machine", group: "Core" },
+  { id: "cable-crunch", name: "Cable Crunch", group: "Core" },
+  { id: "hanging-knee", name: "Hanging Knee Raise", group: "Core" },
+  { id: "roman-chair", name: "Roman Chair Knee Raise", group: "Core" },
+  { id: "roman-chair-side-bend", name: "Roman Chair Side Bend", group: "Core" },
 ];
 
-const starterLastWorkoutData: Record<string, SetData[]> = {};
-
-function getInputClass(value: string, lastValue: number) {
-  const numberValue = Number(value);
-
-  if (value !== "" && numberValue >= lastValue) {
-    return "bg-green-400 text-black font-bold";
-  }
-
-  return "bg-gray-700 text-white";
-}
+// Retain names of retired exercises for existing saved workout summaries.
+// Their history remains in storage even though they are no longer selectable.
+const RETIRED_EXERCISE_NAMES: Record<string, string> = {
+  "bb-incline": "Barbell Incline Press",
+  "arnold": "Seated Arnold Press",
+  "cable-curl": "Cable Biceps Curl",
+  "ez-curl": "EZ-Bar Curl",
+  "skullcrusher": "Skull Crusher",
+  "bb-squat": "Barbell Squat",
+  "seated-leg-curl": "Seated Leg Curl",
+  "calf-raise": "Calf Raise",
+};
+const STORE = "gym-log-v2";
+const today = () => new Date().toLocaleDateString("en-US");
+const blankHistory = (): WorkoutHistory => ({
+  "Push Day": [], "Pull Day": [], "Leg Day": [],
+});
+const exerciseName = (id: string) => LIBRARY.find((item) => item.id === id)?.name ?? RETIRED_EXERCISE_NAMES[id] ?? id;
+const number = (value: string | undefined) => Math.max(0, Number(value) || 0);
+const inputClass = (value: string, last: number) =>
+  value !== "" && number(value) >= last
+    ? "bg-green-400 text-black font-bold"
+    : "bg-gray-700 text-white";
 
 export default function Home() {
-  const [selectedWorkout, setSelectedWorkout] =
-    useState<WorkoutName>("Push Day");
-
-  const [workoutDate, setWorkoutDate] = useState(getToday());
-  const [entries, setEntries] = useState<Record<string, string>>({});
-  const [suggestions, setSuggestions] = useState<Record<string, string>>({});
-  const [timers, setTimers] = useState<Record<string, number>>({});
-  const [extraRows, setExtraRows] = useState<Record<string, WorkoutRow[]>>({});
-  const [lastWorkoutData, setLastWorkoutData] = useState<
-    Record<string, SetData[]>
-  >(starterLastWorkoutData);
-
-  useEffect(() => {
-    const today = getToday();
-
-    const savedEntries = localStorage.getItem("gym-log-entries");
-    const savedDate = localStorage.getItem("gym-log-date");
-    const savedWorkout = localStorage.getItem("gym-log-selected-workout");
-    const savedLastWorkoutData = localStorage.getItem("gym-log-last-data");
-    const savedExtraRows = localStorage.getItem("gym-log-extra-rows");
-
-    if (savedDate === today && savedEntries) {
-      setEntries(JSON.parse(savedEntries));
-      setWorkoutDate(savedDate);
-    } else {
-      setWorkoutDate(today);
-      setEntries({});
-      localStorage.setItem("gym-log-date", today);
-      localStorage.setItem("gym-log-entries", JSON.stringify({}));
-    }
-
-    if (savedLastWorkoutData) {
-      setLastWorkoutData(JSON.parse(savedLastWorkoutData));
-    }
-
-    if (savedExtraRows) {
-      setExtraRows(JSON.parse(savedExtraRows));
-    }
-
-    if (
-      savedWorkout === "Push Day" ||
-      savedWorkout === "Pull Day" ||
-      savedWorkout === "Leg Day"
-    ) {
-      setSelectedWorkout(savedWorkout);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("gym-log-entries", JSON.stringify(entries));
-  }, [entries]);
-
-  useEffect(() => {
-    localStorage.setItem("gym-log-date", workoutDate);
-  }, [workoutDate]);
-
-  useEffect(() => {
-    localStorage.setItem("gym-log-selected-workout", selectedWorkout);
-  }, [selectedWorkout]);
-
-  useEffect(() => {
-    localStorage.setItem("gym-log-last-data", JSON.stringify(lastWorkoutData));
-  }, [lastWorkoutData]);
-
-  useEffect(() => {
-    localStorage.setItem("gym-log-extra-rows", JSON.stringify(extraRows));
-  }, [extraRows]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimers((previous) => {
-        const updatedTimers = { ...previous };
-
-        Object.keys(updatedTimers).forEach((timerKey) => {
-          if (updatedTimers[timerKey] > 0) {
-            updatedTimers[timerKey] -= 1;
-          }
-        });
-
-        return updatedTimers;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  function getRowsForExercise(exercise: string) {
-    return [...baseRows, ...(extraRows[exercise] ?? [])];
-  }
-
-  function getExerciseTotals(exercise: string) {
-  const rows = getRowsForExercise(exercise);
-
-  return rows.reduce(
-    (totals, row, index) => {
-      const lastSet = lastWorkoutData[exercise]?.[index] ?? {
-        weight: 0,
-        reps: 0,
-      };
-
-      const weightKey = `${exercise}-${row.id}-weight`;
-      const repsKey = `${exercise}-${row.id}-reps`;
-
-      const todayWeight = Number(entries[weightKey]) || 0;
-      const todayReps = Number(entries[repsKey]) || 0;
-
-      totals.todayWeight += todayWeight * todayReps;
-      totals.todayReps += todayReps;
-
-      totals.lastWeight += (lastSet.weight || 0) * (lastSet.reps || 0);
-      totals.lastReps += lastSet.reps || 0;
-
-      return totals;
-    },
-    {
-      todayWeight: 0,
-      todayReps: 0,
-      lastWeight: 0,
-      lastReps: 0,
-    }
-  );
-}
-
-  function updateEntry(
-    key: string,
-    value: string,
-    exercise: string,
-    rowIndex: number,
-    field: "weight" | "reps"
-  ) {
-    setEntries((previous) => ({
-      ...previous,
-      [key]: value,
-    }));
-
-    setSuggestions((previous) => {
-      const updated = { ...previous };
-      delete updated[key];
-
-      const nextRow = getRowsForExercise(exercise)[rowIndex + 1];
-
-      if (value.trim() !== "" && nextRow) {
-        const nextKey = `${exercise}-${nextRow.id}-${field}`;
-        updated[nextKey] = value;
-      }
-
-      return updated;
-    });
-  }
-
-  function acceptSuggestion(
-  key: string,
-  exercise: string,
-  rowIndex: number,
-  field: "weight" | "reps"
-) {
-  const suggestedValue = suggestions[key];
-
-  if (!suggestedValue) return;
-
-  const nextRow = getRowsForExercise(exercise)[rowIndex + 1];
-
-  setEntries((previous) => ({
-    ...previous,
-    [key]: suggestedValue,
-  }));
-
-  setSuggestions((previous) => {
-    const updated = { ...previous };
-    delete updated[key];
-
-    if (nextRow) {
-      const nextKey = `${exercise}-${nextRow.id}-${field}`;
-      updated[nextKey] = suggestedValue;
-    }
-
-    return updated;
+  const [ready, setReady] = useState(false);
+  const [day, setDay] = useState<WorkoutDay>("Push Day");
+  const [date, setDate] = useState(today());
+  const [lastOrders, setLastOrders] = useState<WorkoutHistory>(blankHistory);
+  const [history, setHistory] = useState<ExerciseHistory>({});
+  const [orders, setOrders] = useState<WorkoutHistory>(blankHistory);
+  const [modes, setModes] = useState<Record<WorkoutDay, "choose" | "same" | "freestyle">>({
+    "Push Day": "choose", "Pull Day": "choose", "Leg Day": "choose",
   });
-}
+  const [entries, setEntries] = useState<EntryMap>({});
+  const [suggestions, setSuggestions] = useState<EntryMap>({});
+  const [timerEnds, setTimerEnds] = useState<Record<string, number>>({});
+  const [clock, setClock] = useState(Date.now());
 
-  function clearSuggestion(key: string) {
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORE);
+      if (stored) {
+        const data = JSON.parse(stored);
+        const savedDay = DAYS.includes(data.day) ? data.day as WorkoutDay : "Push Day";
+        setDay(savedDay);
+        setLastOrders({ ...blankHistory(), ...(data.lastOrders ?? {}) });
+        setHistory(data.history ?? {});
+        if (data.date === today()) {
+          setDate(data.date);
+          setOrders({ ...blankHistory(), ...(data.orders ?? {}) });
+          setModes({ "Push Day": "choose", "Pull Day": "choose", "Leg Day": "choose", ...(data.modes ?? {}) });
+          setEntries(data.entries ?? {});
+        }
+      } else {
+        // One-time import of the old fixed-exercise app's previous set data.
+        const old = localStorage.getItem("gym-log-last-data");
+        if (old) {
+          const parsed = JSON.parse(old) as Record<string, SetData[]>;
+          const migrated: ExerciseHistory = {};
+          for (const exercise of LIBRARY) {
+            if (Array.isArray(parsed[exercise.name])) migrated[exercise.id] = parsed[exercise.name].slice(0, 5);
+          }
+          setHistory(migrated);
+          setLastOrders({ ...DEFAULT_EXERCISES });
+        }
+      }
+    } catch (error) {
+      console.error("Could not load saved workout data", error);
+    }
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    localStorage.setItem(STORE, JSON.stringify({ day, date, lastOrders, history, orders, modes, entries }));
+  }, [ready, day, date, lastOrders, history, orders, modes, entries]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setClock(Date.now()), 250);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  function chooseMode(mode: "same" | "freestyle") {
+    setModes((previous) => ({ ...previous, [day]: mode }));
+    setOrders((previous) => ({
+      ...previous,
+      [day]: mode === "same" ? lastOrders[day].filter((id) => LIBRARY.some((exercise) => exercise.id === id)) : [],
+    }));
+    setSuggestions({});
+  }
+
+  function changeExercise(index: number, id: string) {
+    setOrders((previous) => {
+      const updated = [...previous[day]];
+      if (index === updated.length) updated.push(id);
+      else updated[index] = id;
+      return { ...previous, [day]: updated };
+    });
+    setSuggestions({});
+  }
+
+  function removeExercise(index: number) {
+    setOrders((previous) => ({
+      ...previous,
+      [day]: previous[day].filter((_, position) => position !== index),
+    }));
+    setSuggestions({});
+  }
+
+  function moveExercise(index: number, direction: -1 | 1) {
+    setOrders((previous) => {
+      const updated = [...previous[day]];
+      const target = index + direction;
+      if (target < 0 || target >= updated.length) return previous;
+      [updated[index], updated[target]] = [updated[target], updated[index]];
+      return { ...previous, [day]: updated };
+    });
+  }
+
+  function updateEntry(key: string, value: string, exerciseId: string, index: number, field: "weight" | "reps") {
+    setEntries((previous) => ({ ...previous, [key]: value }));
     setSuggestions((previous) => {
       const updated = { ...previous };
       delete updated[key];
+      if (value.trim() !== "" && index < 4) updated[`${day}|${exerciseId}|${index + 1}|${field}`] = value;
       return updated;
     });
   }
 
-  function startTimer(timerKey: string, seconds: number) {
-    setTimers((previous) => ({
-      ...previous,
-      [timerKey]: seconds,
-    }));
-  }
-
-  function addAdditionalSet(exercise: string) {
-    const currentRows = getRowsForExercise(exercise);
-    const nextSetNumber =
-      currentRows.filter((row) => row.type === "normal").length + 1;
-
-    const newRow: WorkoutRow = {
-      id: `set-${nextSetNumber}-${Date.now()}`,
-      label: `Set ${nextSetNumber}`,
-      type: "normal",
-    };
-
-    setExtraRows((previous) => ({
-      ...previous,
-      [exercise]: [...(previous[exercise] ?? []), newRow],
-    }));
-  }
-
-  function addBurnoutSet(exercise: string) {
-    const currentBurnoutCount = (extraRows[exercise] ?? []).filter(
-      (row) => row.type === "burnout"
-    ).length;
-
-    const newRow: WorkoutRow = {
-      id: `burnout-${currentBurnoutCount + 1}-${Date.now()}`,
-      label:
-        currentBurnoutCount === 0
-          ? "Drop-set Burnout"
-          : `Drop-set Burnout ${currentBurnoutCount + 1}`,
-      type: "burnout",
-    };
-
-    setExtraRows((previous) => ({
-      ...previous,
-      [exercise]: [...(previous[exercise] ?? []), newRow],
-    }));
-  }
-
-  function completeWorkout() {
-    const updatedLastData = { ...lastWorkoutData };
-
-    workouts[selectedWorkout].forEach((exercise) => {
-      const allRows = getRowsForExercise(exercise);
-
-      updatedLastData[exercise] = allRows.map((row, index) => {
-        const weightKey = `${exercise}-${row.id}-weight`;
-        const repsKey = `${exercise}-${row.id}-reps`;
-
-        const previousSet = lastWorkoutData[exercise]?.[index] ?? {
-          weight: 0,
-          reps: 0,
-        };
-
-        const enteredWeight = entries[weightKey];
-        const enteredReps = entries[repsKey];
-
-        if (row.type === "burnout") {
-          return {
-            weight: 0,
-            reps:
-              enteredReps && Number(enteredReps) > 0
-                ? Number(enteredReps)
-                : previousSet.reps,
-          };
-        }
-
-        return {
-          weight:
-            enteredWeight && Number(enteredWeight) > 0
-              ? Number(enteredWeight)
-              : previousSet.weight,
-          reps:
-            enteredReps && Number(enteredReps) > 0
-              ? Number(enteredReps)
-              : previousSet.reps,
-        };
-      });
+  function acceptSuggestion(key: string, exerciseId: string, index: number, field: "weight" | "reps") {
+    const value = suggestions[key];
+    if (!value) return;
+    setEntries((previous) => ({ ...previous, [key]: value }));
+    setSuggestions((previous) => {
+      const updated = { ...previous };
+      delete updated[key];
+      if (index < 4) updated[`${day}|${exerciseId}|${index + 1}|${field}`] = value;
+      return updated;
     });
-
-    setLastWorkoutData(updatedLastData);
-    setEntries({});
-    setSuggestions({});
-    setExtraRows({});
-    setWorkoutDate(getToday());
   }
 
-  function renderInput(
-    key: string,
-    value: string,
-    lastValue: number,
-    exercise: string,
-    rowIndex: number,
-    field: "weight" | "reps"
-  ) {
+  function renderInput(exerciseId: string, index: number, field: "weight" | "reps", last: number) {
+    const key = `${day}|${exerciseId}|${index}|${field}`;
+    const value = entries[key] ?? "";
+    const suggestion = suggestions[key];
     return (
-      <div className="relative">
+      <div className="relative min-w-0">
         <input
-          inputMode="numeric"
-          placeholder={suggestions[key] ?? "0"}
-          value={value}
-          onFocus={() => clearSuggestion(key)}
-          onChange={(e) =>
-            updateEntry(key, e.target.value, exercise, rowIndex, field)
-          }
-          className={`w-full rounded-lg p-2 text-center ${getInputClass(
-            value,
-            lastValue
-          )}`}
+          type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*"
+          value={value} placeholder={suggestion ?? "0"}
+          onChange={(event) => updateEntry(key, event.target.value, exerciseId, index, field)}
+          className={`w-full min-w-0 rounded-lg p-2 text-center ${inputClass(value, last)}`}
         />
-
-        {suggestions[key] && value === "" && (
-          <button
-            onMouseDown={(e) => {
-              e.preventDefault();
-              acceptSuggestion(key, exercise, rowIndex, field);
-            }}
-            className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-green-400 text-sm font-bold text-black"
-          >
-            ✓
-          </button>
+        {suggestion && value === "" && (
+          <button type="button" aria-label={`Use suggested ${field}`}
+            onClick={() => acceptSuggestion(key, exerciseId, index, field)}
+            className="absolute -right-1 -top-2 z-10 h-6 w-6 rounded-full bg-green-400 text-sm font-bold text-black">✓</button>
         )}
       </div>
     );
   }
 
-  return (
-    <main className="min-h-screen bg-gray-900 text-white p-4">
-      <div className="text-center mb-6">
-        <select
-          value={selectedWorkout}
-          onChange={(e) => setSelectedWorkout(e.target.value as WorkoutName)}
-          className="mb-3 rounded-lg bg-gray-800 p-3 text-2xl font-bold text-white text-center"
-        >
-          <option>Push Day</option>
-          <option>Pull Day</option>
-          <option>Leg Day</option>
-        </select>
+  function secondsRemaining(key: string) {
+    return Math.max(0, Math.ceil(((timerEnds[key] ?? 0) - clock) / 1000));
+  }
 
+  function completeWorkout() {
+    const selected = orders[day];
+    if (selected.length === 0) return;
+    const updated: ExerciseHistory = { ...history };
+    for (const id of selected) {
+      updated[id] = Array.from({ length: 5 }, (_, index) => {
+        const prior = history[id]?.[index] ?? { weight: 0, reps: 0 };
+        const weight = entries[`${day}|${id}|${index}|weight`];
+        const reps = entries[`${day}|${id}|${index}|reps`];
+        return {
+          weight: weight !== undefined && weight !== "" ? number(weight) : prior.weight,
+          reps: reps !== undefined && reps !== "" ? number(reps) : prior.reps,
+        };
+      });
+    }
+    setHistory(updated);
+    setLastOrders((previous) => ({ ...previous, [day]: [...selected] }));
+    setOrders((previous) => ({ ...previous, [day]: [] }));
+    setModes((previous) => ({ ...previous, [day]: "choose" }));
+    setEntries((previous) => Object.fromEntries(Object.entries(previous).filter(([key]) => !key.startsWith(`${day}|`))));
+    setSuggestions({});
+    setTimerEnds({});
+    setDate(today());
+    window.alert("Workout saved! Your exercise order and set results are ready for next time.");
+  }
+
+  if (!ready) return <main className="min-h-screen bg-gray-900 p-4 text-white">Loading workout...</main>;
+
+  const currentOrder = orders[day];
+  const currentMode = modes[day];
+  const availableExercises = LIBRARY.filter((exercise) => !currentOrder.includes(exercise.id));
+  const groups = [...new Set(LIBRARY.map((exercise) => exercise.group))];
+
+  function exercisePicker(index: number, currentId = "") {
+    return (
+      <select
+        value={currentId}
+        onChange={(event) => changeExercise(index, event.target.value)}
+        className="w-full min-w-0 rounded-lg bg-gray-700 p-3 text-base text-white"
+      >
+        <option value="" disabled>Choose an exercise...</option>
+        {groups.map((group) => (
+          <optgroup key={group} label={group}>
+            {LIBRARY.filter((exercise) => exercise.group === group && (exercise.id === currentId || availableExercises.includes(exercise))).map((exercise) => (
+              <option key={exercise.id} value={exercise.id}>{exercise.name}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-900 p-4 pb-12 text-white">
+      <div className="mb-5 text-center">
+        <select value={day} onChange={(event) => setDay(event.target.value as WorkoutDay)}
+          className="mb-3 rounded-lg bg-gray-800 p-3 text-center text-2xl font-bold text-white">
+          {DAYS.map((option) => <option key={option}>{option}</option>)}
+        </select>
         <div>
-          <input
-            type="text"
-            value={workoutDate}
-            onChange={(e) => setWorkoutDate(e.target.value)}
-            className="rounded-lg bg-gray-800 p-3 text-center text-gray-200"
-          />
+          <input type="text" value={date} onChange={(event) => setDate(event.target.value)}
+            className="rounded-lg bg-gray-800 p-3 text-center text-gray-200" />
         </div>
       </div>
 
-      {workouts[selectedWorkout].map((exercise) => {
-        const exerciseRows = getRowsForExercise(exercise);
-        const totals = getExerciseTotals(exercise);
-
-        return (
-          <section key={exercise} className="bg-gray-800 rounded-xl p-4 mb-5">
-            <h2 className="text-center text-2xl font-semibold mb-4">
-              {exercise}
-            </h2>
-
-            <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr] gap-2 text-sm font-bold text-gray-300 mb-2">
-              <div></div>
-              <div>Weight</div>
-              <div>Last</div>
-              <div>Reps</div>
-              <div>Last</div>
-            </div>
-
-            {exerciseRows.map((row, index) => {
-              const lastSet = lastWorkoutData[exercise]?.[index] ?? {
-                weight: 0,
-                reps: 0,
-              };
-
-              const weightKey = `${exercise}-${row.id}-weight`;
-              const repsKey = `${exercise}-${row.id}-reps`;
-
+      <section className="mb-5 rounded-xl bg-gray-800 p-4">
+        <h2 className="mb-2 text-lg font-bold">Previous {day} Workout</h2>
+        {lastOrders[day].length ? (
+          <div className="mb-4 grid grid-cols-2 gap-x-4 text-sm text-gray-200">
+            {[0, 1].map((column) => {
+              const split = Math.ceil(lastOrders[day].length / 2);
               return (
-                <div
-                  key={`${exercise}-${row.id}`}
-                  className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr] gap-2 mb-2 items-center"
-                >
-                  <div className="text-sm text-gray-200">{row.label}</div>
-
-                  {row.type === "burnout" ? (
-                    <>
-                      <div className="text-center text-gray-500">—</div>
-                      <div className="text-center text-gray-500">—</div>
-                    </>
-                  ) : (
-                    <>
-                      {renderInput(
-                        weightKey,
-                        entries[weightKey] ?? "",
-                        lastSet.weight,
-                        exercise,
-                        index,
-                        "weight"
-                      )}
-
-                      <div className="text-center text-gray-400">
-                        {lastSet.weight}
-                      </div>
-                    </>
-                  )}
-
-                  {renderInput(
-                    repsKey,
-                    entries[repsKey] ?? "",
-                    lastSet.reps,
-                    exercise,
-                    index,
-                    "reps"
-                  )}
-
-                  <div className="text-center text-gray-400">{lastSet.reps}</div>
+                <div key={column} className="flex min-w-0 flex-col gap-3">
+                  {lastOrders[day].slice(column * split, (column + 1) * split).map((id, index) => (
+                    <div key={`${id}-${column * split + index}`} className="flex min-w-0 items-start gap-2">
+                      <span className="shrink-0 text-xs text-gray-400">{column * split + index + 1}.</span>
+                      <span className="min-w-0 break-words leading-snug">{exerciseName(id)}</span>
+                    </div>
+                  ))}
                 </div>
               );
             })}
+          </div>
+        ) : <p className="mb-4 text-sm text-gray-400">No saved exercise order yet.</p>}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => chooseMode("same")}
+            disabled={lastOrders[day].length === 0}
+            className={`rounded-lg p-3 font-bold disabled:opacity-40 ${currentMode === "same" ? "bg-green-500 text-black" : "bg-gray-700"}`}>
+            Keep the Same
+          </button>
+          <button type="button" onClick={() => chooseMode("freestyle")}
+            className={`rounded-lg p-3 font-bold ${currentMode === "freestyle" ? "bg-green-500 text-black" : "bg-gray-700"}`}>
+            Freestyle
+          </button>
+        </div>
+      </section>
 
-            <div className="mt-4 grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr] gap-2 items-center">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => addAdditionalSet(exercise)}
-                  className="h-10 w-10 rounded-full bg-purple-500 text-sm font-bold text-black shadow-lg"
-                >
-                  AS
-                </button>
+      {currentMode === "choose" && <p className="text-center text-gray-400">Choose how you'd like to start today's workout.</p>}
 
-                <button
-                  onClick={() => addBurnoutSet(exercise)}
-                  className="h-10 w-10 rounded-full bg-orange-400 text-sm font-bold text-black shadow-lg"
-                >
-                  DS
-                </button>
-              </div>
+      {currentMode !== "choose" && (
+        <>
+          {currentOrder.map((id, position) => {
+            const lastSets = history[id] ?? [];
+            const totals = Array.from({ length: 5 }, (_, index) => {
+              const prior = lastSets[index] ?? { weight: 0, reps: 0 };
+              const weight = number(entries[`${day}|${id}|${index}|weight`]);
+              const reps = number(entries[`${day}|${id}|${index}|reps`]);
+              return { prior, weight, reps };
+            }).reduce((sum, row) => ({
+              todayVolume: sum.todayVolume + row.weight * row.reps,
+              lastVolume: sum.lastVolume + row.prior.weight * row.prior.reps,
+              todayReps: sum.todayReps + row.reps,
+              lastReps: sum.lastReps + row.prior.reps,
+            }), { todayVolume: 0, lastVolume: 0, todayReps: 0, lastReps: 0 });
 
-              <div className="rounded-lg bg-gray-700 p-2 text-center font-bold">
-                {totals.todayWeight}
-              </div>
+            return (
+              <section key={`${day}-${id}`} className="mb-5 rounded-xl bg-gray-800 p-4">
+                <h2 className="mb-3 text-center text-xl font-semibold">{exerciseName(id)}</h2>
+                {currentMode === "freestyle" && (
+                  <div className="mb-4 flex items-center gap-2">
+                    <div className="min-w-0 flex-1">{exercisePicker(position, id)}</div>
+                    <button type="button" aria-label="Move exercise up" disabled={position === 0}
+                      onClick={() => moveExercise(position, -1)} className="rounded bg-gray-700 px-2 py-3 disabled:opacity-30">{"\u2191"}</button>
+                    <button type="button" aria-label="Move exercise down" disabled={position === currentOrder.length - 1}
+                      onClick={() => moveExercise(position, 1)} className="rounded bg-gray-700 px-2 py-3 disabled:opacity-30">{"\u2193"}</button>
+                    <button type="button" aria-label="Remove exercise" onClick={() => removeExercise(position)}
+                      className="rounded bg-red-800 px-2 py-3">{"\u00d7"}</button>
+                  </div>
+                )}
+                <div className="mb-2 grid grid-cols-[1.1fr_1fr_1fr_1fr_1fr] gap-2 text-center text-xs font-bold text-gray-300">
+                  <div /><div>Weight</div><div>Last</div><div>Reps</div><div>Last</div>
+                </div>
+                {Array.from({ length: 5 }, (_, index) => {
+                  const prior = lastSets[index] ?? { weight: 0, reps: 0 };
+                  return (
+                    <div key={index} className="mb-2 grid grid-cols-[1.1fr_1fr_1fr_1fr_1fr] items-center gap-2">
+                      <div className="text-sm text-gray-200">Set {index + 1}</div>
+                      {renderInput(id, index, "weight", prior.weight)}
+                      <div className="text-center text-gray-400">{prior.weight}</div>
+                      {renderInput(id, index, "reps", prior.reps)}
+                      <div className="text-center text-gray-400">{prior.reps}</div>
+                    </div>
+                  );
+                })}
+                <div className="mt-4 grid grid-cols-[1.1fr_1fr_1fr_1fr_1fr] items-center gap-2 text-center">
+                  <div className="text-xs font-semibold text-gray-300">Totals</div>
+                  <div className="rounded-lg bg-gray-700 px-1 py-3 font-bold">{totals.todayVolume}</div>
+                  <div className="rounded-lg bg-gray-700 px-1 py-3 font-bold text-gray-300">{totals.lastVolume}</div>
+                  <div className="rounded-lg bg-gray-700 px-1 py-3 font-bold">{totals.todayReps}</div>
+                  <div className="rounded-lg bg-gray-700 px-1 py-3 font-bold text-gray-300">{totals.lastReps}</div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {[90, 120].map((seconds) => {
+                    const key = `${day}|${id}|${seconds}`;
+                    return (
+                      <button type="button" key={seconds}
+                        onClick={() => setTimerEnds((previous) => ({ ...previous, [key]: Date.now() + seconds * 1000 }))}
+                        className="rounded-lg bg-blue-500 p-3 text-3xl font-black text-black">
+                        {secondsRemaining(key) || seconds}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
 
-              <div className="rounded-lg bg-gray-700 p-2 text-center font-bold text-gray-300">
-                {totals.lastWeight}
-              </div>
-
-              <div className="rounded-lg bg-gray-700 p-2 text-center font-bold">
-                {totals.todayReps}
-              </div>
-
-              <div className="rounded-lg bg-gray-700 p-2 text-center font-bold text-gray-300">
-                {totals.lastReps}
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                onClick={() => startTimer(`${exercise}-90`, 90)}
-                className="rounded-lg bg-blue-500 p-3 text-3xl font-black text-black"
-              >
-                {timers[`${exercise}-90`] && timers[`${exercise}-90`] > 0
-                  ? timers[`${exercise}-90`]
-                  : "90"}
-              </button>
-
-              <button
-                onClick={() => startTimer(`${exercise}-120`, 120)}
-                className="rounded-lg bg-blue-500 p-3 text-3xl font-black text-black"
-              >
-                {timers[`${exercise}-120`] && timers[`${exercise}-120`] > 0
-                  ? timers[`${exercise}-120`]
-                  : "120"}
-              </button>
-            </div>
-          </section>
-        );
-      })}
-
-      <button
-        onClick={completeWorkout}
-        className="w-full rounded-xl bg-green-500 p-4 text-xl font-bold text-black"
-      >
-        Complete Workout
-      </button>
+          {currentMode === "freestyle" && availableExercises.length > 0 && (
+            <section className="mb-5 rounded-xl bg-gray-800 p-4">
+              <h2 className="mb-3 text-center text-lg font-semibold">{currentOrder.length ? "Add Next Exercise" : "Choose First Exercise"}</h2>
+              {exercisePicker(currentOrder.length)}
+            </section>
+          )}
+          {currentOrder.length > 0 && (
+            <button type="button" onClick={completeWorkout}
+              className="w-full rounded-xl bg-green-500 p-4 text-xl font-bold text-black">Complete Workout</button>
+          )}
+        </>
+      )}
     </main>
   );
 }
