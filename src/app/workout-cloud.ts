@@ -50,3 +50,88 @@ export async function saveCloudWorkoutState(
 
   if (error) throw error;
 }
+
+
+export async function createWorkoutSession(
+  workoutType: string,
+  workoutDate: string
+): Promise<string> {
+  const { data: userData, error: userError } =
+    await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Please sign in to save your workout.");
+  }
+
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .insert({
+      user_id: userData.user.id,
+      workout_type: workoutType,
+      workout_date: workoutDate,
+      completed_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error) throw error;
+
+  return data.id;
+}
+
+export type CompletedWorkoutSet = {
+  exercise_id: string;
+  exercise_name: string;
+  exercise_order: number;
+  set_number: number;
+  weight: number;
+  reps: number;
+  volume: number;
+};
+
+export async function saveCompletedWorkoutSets(
+  sessionId: string,
+  sets: CompletedWorkoutSet[]
+): Promise<void> {
+  const { data: userData, error: userError } =
+    await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Please sign in to save your workout.");
+  }
+
+  if (sets.length === 0) {
+    throw new Error("No completed sets to save.");
+  }
+
+  const rows = sets.map((set) => ({
+    user_id: userData.user.id,
+    session_id: sessionId,
+    ...set,
+  }));
+
+  const { error } = await supabase
+    .from("workout_sets")
+    .insert(rows);
+
+  if (error) throw error;
+}
+
+export async function deleteIncompleteWorkoutSession(
+  sessionId: string
+): Promise<void> {
+  const { data: userData, error: userError } =
+    await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Please sign in to Gym Log first.");
+  }
+
+  const { error } = await supabase
+    .from("workout_sessions")
+    .delete()
+    .eq("id", sessionId)
+    .eq("user_id", userData.user.id);
+
+  if (error) throw error;
+}
