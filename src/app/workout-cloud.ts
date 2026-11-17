@@ -104,11 +104,13 @@ export async function saveCompletedWorkoutSets(
     throw new Error("No completed sets to save.");
   }
 
-  const rows = sets.map((set) => ({
+  const rows = sets.map(
+  ({ volume: _volume, ...set }) => ({
     user_id: userData.user.id,
     session_id: sessionId,
     ...set,
-  }));
+  })
+);
 
   const { error } = await supabase
     .from("workout_sets")
@@ -134,4 +136,38 @@ export async function deleteIncompleteWorkoutSession(
     .eq("user_id", userData.user.id);
 
   if (error) throw error;
+}
+
+export async function saveCompleteWorkout(
+  sessionId: string,
+  workoutType: string,
+  workoutDate: string,
+  sets: CompletedWorkoutSet[]
+): Promise<string> {
+  const { data: userData, error: userError } =
+    await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Please sign in to save your workout.");
+  }
+
+  if (sets.length === 0) {
+    throw new Error("No completed sets to save.");
+  }
+
+  const { data, error } = await supabase.rpc(
+    "save_completed_workout",
+    {
+      p_session_id: sessionId,
+      p_workout_type: workoutType,
+      p_workout_date: workoutDate,
+      p_sets: sets.map(
+        ({ volume: _volume, ...set }) => set
+      ),
+    }
+  );
+
+  if (error) throw error;
+
+  return data as string;
 }

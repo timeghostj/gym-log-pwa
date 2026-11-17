@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import {
   loadCloudWorkoutState,
   saveCloudWorkoutState,
+  saveCompleteWorkout,
+  type CompletedWorkoutSet,
 } from "./workout-cloud";
 
 type WorkoutDay = "Push Day" | "Pull Day" | "Leg Day";
@@ -107,7 +109,25 @@ function isValidCloudWorkoutState(
   );
 }
 const STORE = "gym-log-v3";
+const SESSION_ID_STORE = "gym-log-v3-pending-session-id";
+function getOrCreateWorkoutSessionId(): string {
+  const existing = localStorage.getItem(SESSION_ID_STORE);
+
+  if (existing) {
+    return existing;
+  }
+
+  const newId = crypto.randomUUID();
+  localStorage.setItem(SESSION_ID_STORE, newId);
+
+  return newId;
+}
 const today = () => new Date().toLocaleDateString("en-US");
+const toDatabaseDate = (displayDate: string): string => {
+  const [month, day, year] = displayDate.split("/");
+
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+};
 const blankHistory = (): WorkoutHistory => ({
   "Push Day": [], "Pull Day": [], "Leg Day": [],
 });
@@ -123,6 +143,8 @@ export default function Home() {
   const [localReady, setLocalReady] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [isSavingWorkout, setIsSavingWorkout] = useState(false);
+  const workoutSessionId = useRef<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState("Cloud not connected");
   const [day, setDay] = useState<WorkoutDay>("Push Day");
   const [date, setDate] = useState(today());
@@ -331,9 +353,86 @@ setLocalReady(true);
     }
   }
 
-  function completeWorkout() {
+async function completeWorkout() {
+        if (isSavingWorkout) return;
+
     const selected = orders[day];
     if (selected.length === 0) return;
+    const sessionId = getOrCreateWorkoutSessionId();
+workoutSessionId.current = sessionId;
+    const completedSets: CompletedWorkoutSet[] = selected.flatMap(
+  (exerciseId, exerciseIndex) =>
+    Array.from({ length: 5 }, (_, setIndex) => {
+      const weightText = entries[`${day}|${exerciseId}|${setIndex}|weight`];
+      const repsText = entries[`${day}|${exerciseId}|${setIndex}|reps`];
+
+      if (
+        weightText === undefined ||
+        weightText.trim() === "" ||
+        repsText === undefined ||
+        repsText.trim() === ""
+      ) {
+        return null;
+      }
+
+      const weight = Number(weightText);
+      const reps = Number(repsText);
+
+      if (
+        !Number.isFinite(weight) ||
+        !Number.isInteger(reps) ||
+        weight < 0 ||
+        reps < 0
+      ) {
+        return null;
+      }
+
+      return {
+        exercise_id: exerciseId,
+        exercise_name: exerciseName(exerciseId),
+        exercise_order: exerciseIndex + 1,
+        set_number: setIndex + 1,
+        weight,
+        reps,
+        volume: weight * reps,
+      };
+    }).filter((set): set is CompletedWorkoutSet => set !== null)
+);
+if (completedSets.length === 0) {
+  window.alert(
+    "No completed sets found. Enter your weights and reps before saving."
+  );
+  return;
+}
+
+setIsSavingWorkout(true);
+setCloudError(null);
+
+try {
+  await saveCompleteWorkout(
+    sessionId,
+    day,
+    toDatabaseDate(date),
+    completedSets
+  );
+} catch (error) {
+  const message =
+    error instanceof Error ? error.message : "Unknown cloud save error";
+
+  console.error("Workout cloud save failed:", error);
+  setCloudError(message);
+  setCloudStatus("Workout save failed");
+  window.alert(
+    `Cloud save failed: ${message}\n\nYour workout entries have NOT been cleared.`
+  );
+  setIsSavingWorkout(false);
+  return;
+}
+
+setIsSavingWorkout(false);
+setCloudStatus("Workout saved to cloud");
+localStorage.removeItem(SESSION_ID_STORE);
+workoutSessionId.current = null;
     const updated: ExerciseHistory = { ...history };
     for (const id of selected) {
       updated[id] = Array.from({ length: 5 }, (_, index) => {
@@ -513,9 +612,14 @@ setLocalReady(true);
             </section>
           )}
           {currentOrder.length > 0 && (
-            <button type="button" onClick={completeWorkout}
-              className="w-full rounded-xl bg-green-500 p-4 text-xl font-bold text-black">Complete Workout</button>
-          )}
+            <button
+  type="button"
+  onClick={completeWorkout}
+  disabled={isSavingWorkout}
+className="w-full rounded-xl bg-green-500 p-4 text-xl font-bold text-black"
+>
+  {isSavingWorkout ? "Saving Workout..." : "Complete Workout"}
+</button>          )}
         </>
       )}
     </main>
