@@ -255,25 +255,64 @@ export async function loadExerciseProgress(
 
   const userId = userData.user.id;
 
-  const { data: sessions, error: sessionsError } = await supabase
+  const sessions: {
+  id: string;
+  workout_date: string;
+  completed_at: string;
+}[] = [];
+
+const pageSize = 500;
+
+for (let offset = 0; ; offset += pageSize) {
+  const { data, error } = await supabase
     .from("workout_sessions")
     .select("id, workout_date, completed_at")
     .eq("user_id", userId)
-    .order("completed_at", { ascending: true });
+    .order("completed_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize - 1);
 
-  if (sessionsError) throw sessionsError;
-  if (!sessions?.length) return [];
+  if (error) throw error;
+
+  sessions.push(...(data ?? []));
+
+  if (!data || data.length < pageSize) break;
+}
+
+if (!sessions.length) return [];
 
   const sessionIds = sessions.map((session) => session.id);
 
-  const { data: sets, error: setsError } = await supabase
-    .from("workout_sets")
-    .select("session_id, weight, reps")
-    .eq("user_id", userId)
-    .eq("exercise_id", exerciseId)
-    .in("session_id", sessionIds);
+  const sets: {
+  session_id: string;
+  weight: number;
+  reps: number;
+}[] = [];
 
-  if (setsError) throw setsError;
+const sessionBatchSize = 100;
+
+for (let start = 0; start < sessionIds.length; start += sessionBatchSize) {
+  const batchIds = sessionIds.slice(start, start + sessionBatchSize);
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("workout_sets")
+      .select("session_id, weight, reps")
+      .eq("user_id", userId)
+      .eq("exercise_id", exerciseId)
+      .in("session_id", batchIds)
+      .order("session_id", { ascending: true })
+      .order("exercise_order", { ascending: true })
+      .order("set_number", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw error;
+
+    sets.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) break;
+  }
+}
 
   const sessionLookup = new Map(
     sessions.map((session) => [session.id, session])
