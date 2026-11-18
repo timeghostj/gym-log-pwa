@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import {
   loadCloudWorkoutState,
+  loadLatestCompletedWorkouts,
   saveCloudWorkoutState,
   saveCompleteWorkout,
   type CompletedWorkoutSet,
@@ -261,6 +262,89 @@ if (localReady) {
     cancelled = true;
   };
 }, [localReady]);
+
+useEffect(() => {
+  if (!localReady) return;
+
+  let cancelled = false;
+
+  async function loadCompletedHistory() {
+    try {
+      const workouts = await loadLatestCompletedWorkouts();
+
+      if (cancelled) return;
+
+      const recoveredOrders: WorkoutHistory = blankHistory();
+      const recoveredHistory: ExerciseHistory = {};
+
+      for (const workout of workouts) {
+        if (!DAYS.includes(workout.workoutType as WorkoutDay)) {
+          continue;
+        }
+
+        const workoutDay = workout.workoutType as WorkoutDay;
+
+        const sortedSets = [...workout.sets].sort(
+          (a, b) =>
+            a.exercise_order - b.exercise_order ||
+            a.set_number - b.set_number
+        );
+
+        const exerciseIds = [
+          ...new Set(sortedSets.map((set) => set.exercise_id)),
+        ];
+
+        recoveredOrders[workoutDay] = exerciseIds;
+
+        for (const id of exerciseIds) {
+          const exerciseSets = sortedSets.filter(
+            (set) => set.exercise_id === id
+          );
+
+          recoveredHistory[id] = Array.from(
+            { length: 5 },
+            (_, index) => {
+              const saved = exerciseSets.find(
+                (set) => set.set_number === index + 1
+              );
+
+              return {
+                weight: saved?.weight ?? 0,
+                reps: saved?.reps ?? 0,
+              };
+            }
+          );
+        }
+      }
+
+      setLastOrders((previous) => ({
+        ...previous,
+        ...Object.fromEntries(
+          DAYS.filter((day) => recoveredOrders[day].length > 0)
+            .map((day) => [day, recoveredOrders[day]])
+        ),
+      }));
+
+      setHistory((previous) => ({
+        ...previous,
+        ...recoveredHistory,
+      }));
+
+      setCloudStatus("Previous workouts loaded from cloud");
+    } catch (error) {
+      if (cancelled) return;
+      console.error("Could not load completed workout history", error);
+    }
+  }
+
+  void loadCompletedHistory();
+
+  return () => {
+    cancelled = true;
+  };
+}, [localReady]);
+
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORE);

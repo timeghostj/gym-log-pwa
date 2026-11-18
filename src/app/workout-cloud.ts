@@ -27,8 +27,73 @@ export async function loadCloudWorkoutState() {
 
   if (error) throw error;
 
-  return data;
+   return data;
 }
+
+export type CompletedWorkoutHistory = {
+  workoutType: string;
+  workoutDate: string;
+  sets: CompletedWorkoutSet[];
+};
+
+export async function loadLatestCompletedWorkouts():
+  Promise<CompletedWorkoutHistory[]> {
+  const { data: userData, error: userError } =
+    await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Please sign in to Gym Log first.");
+  }
+
+  const { data: sessions, error: sessionsError } =
+    await supabase
+      .from("workout_sessions")
+      .select("id, workout_type, workout_date, completed_at")
+      .eq("user_id", userData.user.id)
+      .order("completed_at", { ascending: false });
+
+  if (sessionsError) throw sessionsError;
+
+  const latest = new Map<string, typeof sessions[number]>();
+
+  for (const session of sessions ?? []) {
+    if (!latest.has(session.workout_type)) {
+      latest.set(session.workout_type, session);
+    }
+  }
+
+  const results: CompletedWorkoutHistory[] = [];
+
+  for (const session of latest.values()) {
+    const { data: sets, error: setsError } = await supabase
+      .from("workout_sets")
+      .select(
+        "exercise_id, exercise_name, exercise_order, set_number, weight, reps, volume"
+      )
+      .eq("session_id", session.id)
+      .order("exercise_order", { ascending: true })
+      .order("set_number", { ascending: true });
+
+    if (setsError) throw setsError;
+
+    results.push({
+      workoutType: session.workout_type,
+      workoutDate: session.workout_date,
+      sets: (sets ?? []).map((set) => ({
+        exercise_id: set.exercise_id,
+        exercise_name: set.exercise_name,
+        exercise_order: set.exercise_order,
+        set_number: set.set_number,
+        weight: Number(set.weight),
+        reps: Number(set.reps),
+        volume: Number(set.volume),
+      })),
+    });
+  }
+
+  return results;
+}
+
 
 export async function saveCloudWorkoutState(
   state: CloudWorkoutState
