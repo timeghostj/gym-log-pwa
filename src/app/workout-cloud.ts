@@ -236,3 +236,66 @@ export async function saveCompleteWorkout(
 
   return data as string;
 }
+export type ExerciseProgressSet = {
+  workoutDate: string;
+  completedAt: string;
+  weight: number;
+  reps: number;
+};
+
+export async function loadExerciseProgress(
+  exerciseId: string
+): Promise<ExerciseProgressSet[]> {
+  const { data: userData, error: userError } =
+    await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Please sign in to Gym Log first.");
+  }
+
+  const userId = userData.user.id;
+
+  const { data: sessions, error: sessionsError } = await supabase
+    .from("workout_sessions")
+    .select("id, workout_date, completed_at")
+    .eq("user_id", userId)
+    .order("completed_at", { ascending: true });
+
+  if (sessionsError) throw sessionsError;
+  if (!sessions?.length) return [];
+
+  const sessionIds = sessions.map((session) => session.id);
+
+  const { data: sets, error: setsError } = await supabase
+    .from("workout_sets")
+    .select("session_id, weight, reps")
+    .eq("user_id", userId)
+    .eq("exercise_id", exerciseId)
+    .in("session_id", sessionIds);
+
+  if (setsError) throw setsError;
+
+  const sessionLookup = new Map(
+    sessions.map((session) => [session.id, session])
+  );
+
+  return (sets ?? [])
+    .map((set) => {
+      const session = sessionLookup.get(set.session_id);
+
+      if (!session) return null;
+
+      return {
+        workoutDate: session.workout_date,
+        completedAt: session.completed_at,
+        weight: Number(set.weight),
+        reps: Number(set.reps),
+      };
+    })
+    .filter((set): set is ExerciseProgressSet => set !== null)
+    .sort(
+      (a, b) =>
+        new Date(a.completedAt).getTime() -
+        new Date(b.completedAt).getTime()
+    );
+}

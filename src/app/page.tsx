@@ -778,8 +778,14 @@ function exercisePicker(index: number, currentId = "") {
 
             return (
               <section key={`${day}-${id}`} className="mb-5 rounded-xl bg-gray-800 p-4">
-                <h2 className="mb-3 text-center text-xl font-semibold">{exerciseName(id)}</h2>
-                {currentMode === "freestyle" && (
+<h2 className="mb-3 text-center text-xl font-semibold">
+  <a
+    href={`/exercise-progress/${id}`}
+    className="text-white underline decoration-green-500 decoration-2 underline-offset-4 hover:text-green-400"
+  >
+    {exerciseName(id)}
+  </a>
+</h2>                {currentMode === "freestyle" && (
                   <div className="mb-4 flex items-center gap-2">
                     <div className="min-w-0 flex-1">{exercisePicker(position, id)}</div>
                     <button type="button" aria-label="Move exercise up" disabled={position === 0}
