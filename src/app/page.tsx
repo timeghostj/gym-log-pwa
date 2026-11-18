@@ -202,6 +202,18 @@ export default function Home() {
   const [suggestions, setSuggestions] = useState<EntryMap>({});
   const [timerEnds, setTimerEnds] = useState<Record<string, number>>({});
   const [clock, setClock] = useState(Date.now());
+  const [pickerIndex, setPickerIndex] = useState<number | null>(null);
+const [pickerSearch, setPickerSearch] = useState("");
+useEffect(() => {
+  if (pickerIndex === null) return;
+
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
+  return () => {
+    document.body.style.overflow = previousOverflow;
+  };
+}, [pickerIndex]);
 useEffect(() => {
   let cancelled = false;
 
@@ -514,27 +526,103 @@ workoutSessionId.current = null;
   const availableExercises = LIBRARY.filter((exercise) => !currentOrder.includes(exercise.id));
   const groups = [...new Set(LIBRARY.map((exercise) => exercise.group))];
 
-  function exercisePicker(index: number, currentId = "") {
-    return (
-      <select
-        value={currentId}
-        onChange={(event) => changeExercise(index, event.target.value)}
-        className="w-full min-w-0 rounded-lg bg-gray-700 p-3 text-base text-white"
-      >
-        <option value="" disabled>Choose an exercise...</option>
-        {groups.map((group) => (
-          <optgroup key={group} label={group}>
-            {LIBRARY.filter((exercise) => exercise.group === group && (exercise.id === currentId || availableExercises.includes(exercise))).map((exercise) => (
-              <option key={exercise.id} value={exercise.id}>{exercise.name}</option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-    );
-  }
+  
+function exercisePicker(index: number, currentId = "") {
+  const selectedExercise = LIBRARY.find(
+    (exercise) => exercise.id === currentId
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setPickerIndex(index);
+        setPickerSearch("");
+      }}
+      className="w-full min-w-0 rounded-lg bg-gray-700 p-3 text-left text-base text-white"
+    >
+      {selectedExercise?.name ?? "Choose an exercise..."}
+      <span className="float-right text-gray-300">⌄</span>
+    </button>
+  );
+}
+
 
   return (
     <main className="min-h-screen bg-gray-900 p-4 pb-12 text-white">
+
+{pickerIndex !== null && (
+  <div
+    className="fixed inset-0 z-50 flex flex-col bg-gray-950 text-white"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Choose an exercise"
+  >
+    <div className="border-b border-gray-700 p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-bold">Choose Exercise</h2>
+        <button
+          type="button"
+          onClick={() => setPickerIndex(null)}
+          className="rounded-lg bg-gray-700 px-4 py-2 font-semibold"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <input
+        type="search"
+        autoFocus
+        value={pickerSearch}
+        onChange={(event) => setPickerSearch(event.target.value)}
+        placeholder="Search exercises..."
+        className="w-full rounded-xl border border-gray-600 bg-gray-800 p-4 text-lg text-white outline-none focus:border-green-500"
+      />
+    </div>
+
+    <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-12">
+      {groups.map((group) => {
+        const matches = LIBRARY.filter(
+          (exercise) =>
+            exercise.group === group &&
+            (exercise.id === currentOrder[pickerIndex] ||
+              !currentOrder.includes(exercise.id)) &&
+            exercise.name
+              .toLowerCase()
+              .includes(pickerSearch.trim().toLowerCase())
+        );
+
+        if (matches.length === 0) return null;
+
+        return (
+          <section key={group} className="mb-6">
+            <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-green-400">
+              {group}
+            </h3>
+
+            <div className="overflow-hidden rounded-xl bg-gray-800">
+              {matches.map((exercise) => (
+                <button
+                  key={exercise.id}
+                  type="button"
+                  onClick={() => {
+                    changeExercise(pickerIndex, exercise.id);
+                    setPickerIndex(null);
+                    setPickerSearch("");
+                  }}
+                  className="block w-full border-b border-gray-700 px-4 py-4 text-left text-lg font-medium last:border-b-0 active:bg-green-700"
+                >
+                  {exercise.name}
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  </div>
+)}
+
         <div className="mb-3 rounded-lg bg-gray-800 p-2 text-center text-xs text-gray-300">
   Cloud: {cloudStatus}
 </div>
