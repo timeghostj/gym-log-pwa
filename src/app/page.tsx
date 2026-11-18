@@ -710,6 +710,15 @@ function exercisePicker(index: number, currentId = "") {
         <div className="mb-3 rounded-lg bg-gray-800 p-2 text-center text-xs text-gray-300">
   Cloud: {cloudStatus}
 </div>
+
+{cloudStatus === "Not signed in - local storage only" && (
+  <a
+    href="/login"
+    className="mb-5 block w-full rounded-xl bg-green-500 p-3 text-center font-bold text-black"
+  >
+    Sign In to Cloud
+  </a>
+)}
       <div className="mb-5 text-center">
         <select value={day} onChange={(event) => setDay(event.target.value as WorkoutDay)}
           className="mb-3 rounded-lg bg-gray-800 p-3 text-center text-2xl font-bold text-white">
