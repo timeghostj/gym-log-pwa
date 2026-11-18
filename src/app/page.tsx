@@ -15,6 +15,12 @@ type Exercise = { id: string; name: string; group: string };
 type WorkoutHistory = Record<WorkoutDay, string[]>;
 type ExerciseHistory = Record<string, SetData[]>;
 type EntryMap = Record<string, string>;
+type PendingWorkout = {
+  sessionId: string;
+  workoutType: WorkoutDay;
+  workoutDate: string;
+  sets: CompletedWorkoutSet[];
+};
 
 const DAYS: WorkoutDay[] = ["Push Day", "Pull Day", "Leg Day"];
 const DEFAULT_EXERCISES: WorkoutHistory = {
@@ -110,6 +116,7 @@ function isValidCloudWorkoutState(
 }
 const STORE = "gym-log-v3";
 const SESSION_ID_STORE = "gym-log-v3-pending-session-id";
+const PENDING_WORKOUT_STORE = "gym-log-v3-pending-workout";
 function getOrCreateWorkoutSessionId(): string {
   const existing = localStorage.getItem(SESSION_ID_STORE);
 
@@ -122,6 +129,43 @@ function getOrCreateWorkoutSessionId(): string {
 
   return newId;
 }
+function getOrCreatePendingWorkout(
+  workoutType: WorkoutDay,
+  workoutDate: string,
+  sets: CompletedWorkoutSet[]
+): PendingWorkout {
+  const existing = localStorage.getItem(PENDING_WORKOUT_STORE);
+
+  if (existing) {
+    const pending = JSON.parse(existing) as PendingWorkout;
+
+    if (
+      pending.sessionId &&
+      pending.workoutType &&
+      pending.workoutDate &&
+      Array.isArray(pending.sets)
+    ) {
+      return pending;
+    }
+
+    throw new Error("Saved workout retry data is invalid.");
+  }
+
+  const pending: PendingWorkout = {
+    sessionId: getOrCreateWorkoutSessionId(),
+    workoutType,
+    workoutDate,
+    sets,
+  };
+
+  localStorage.setItem(
+    PENDING_WORKOUT_STORE,
+    JSON.stringify(pending)
+  );
+
+  return pending;
+}
+
 const today = () => new Date().toLocaleDateString("en-US");
 const toDatabaseDate = (displayDate: string): string => {
   const [month, day, year] = displayDate.split("/");
@@ -409,11 +453,17 @@ setIsSavingWorkout(true);
 setCloudError(null);
 
 try {
-  await saveCompleteWorkout(
-    sessionId,
+  const pending = getOrCreatePendingWorkout(
     day,
     toDatabaseDate(date),
     completedSets
+  );
+
+  await saveCompleteWorkout(
+    pending.sessionId,
+    pending.workoutType,
+    pending.workoutDate,
+    pending.sets
   );
 } catch (error) {
   const message =
@@ -432,6 +482,7 @@ try {
 setIsSavingWorkout(false);
 setCloudStatus("Workout saved to cloud");
 localStorage.removeItem(SESSION_ID_STORE);
+localStorage.removeItem(PENDING_WORKOUT_STORE);
 workoutSessionId.current = null;
     const updated: ExerciseHistory = { ...history };
     for (const id of selected) {
